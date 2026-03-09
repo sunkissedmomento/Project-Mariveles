@@ -48,12 +48,12 @@ class CharCallbacks : public BLECharacteristicCallbacks {
     lastReceivedUID.toUpperCase();
     Serial.printf("[BLE RX] Set B scanned: %s\n", lastReceivedUID.c_str());
 
-    // Immediate red if Set B scanned a question tag
+    // Red immediately but keep lastReceivedUID for later match
     if (question_uids.count(lastReceivedUID)) {
       digitalWrite(LED_GREEN, LOW);
       digitalWrite(LED_RED, HIGH);
       Serial.println("[WARN] Question tag scanned on Set B → RED on Set A");
-      lastReceivedUID = "";
+      // DO NOT clear lastReceivedUID — needed for evaluateMatch()
       return;
     }
 
@@ -128,7 +128,16 @@ void loop() {
   uint8_t uidLen;
 
   if (nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLen, 100)) {
-    lastScannedUID = uidToString(uid, uidLen);
+    String scanned = uidToString(uid, uidLen);
+
+    // Debounce — ignore same UID within 1000ms
+    static String lastUID = "";
+    static unsigned long lastTime = 0;
+    if (scanned == lastUID && millis() - lastTime < 1000) return;
+    lastUID = scanned;
+    lastTime = millis();
+
+    lastScannedUID = scanned;
     Serial.printf("[NFC] Set A scanned: %s\n", lastScannedUID.c_str());
 
     // Immediate red if question tag scanned directly on Set A
